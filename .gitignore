@@ -1,5 +1,5 @@
 .venv
 .env
-/faiss_indexS
+/faiss_indexs/*
 
 *.md 
