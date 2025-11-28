@@ -27,3 +27,5 @@ langsmith>=0.1.93
 
 # --- (opțional) pentru compatibilitate completă Pydantic ---
 pydantic>=2.7.0
+
+fastapi

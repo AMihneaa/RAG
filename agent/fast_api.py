@@ -1,3 +1,5 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
 from pathlib import Path
 import os
 
@@ -17,7 +19,6 @@ from langgraph.graph import StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
 
-# ===================== Config & ENV =====================
 
 load_dotenv()
 
@@ -34,7 +35,6 @@ INDEX_DIR = os.getenv("INDEX_DIR", "./faiss_index")
 SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "http://localhost:8080")
 
 
-# ===================== LLM & Embeddings =====================
 
 llm = ChatOpenAI(
     model=MODEL_NAME,
@@ -47,7 +47,6 @@ llm = ChatOpenAI(
 embeddings = HuggingFaceEmbeddings(model_name=EMB_MODEL)
 
 
-# ===================== FAISS: build / load index =====================
 
 def build_or_load_index():
     Path(DOCS_DIR).mkdir(exist_ok=True, parents=True)
@@ -81,7 +80,6 @@ def build_or_load_index():
 vs = build_or_load_index()
 
 
-# ===================== TOOLS =====================
 
 @tool
 def rag_search(query: str) -> str:
@@ -190,7 +188,6 @@ tools = [rag_search, get_route_options]
 model_with_tools = llm.bind_tools(tools)
 
 
-# ===================== LangGraph: noduri & graf =====================
 
 def call_model(state: MessagesState):
     """
@@ -234,27 +231,56 @@ graph.add_conditional_edges(
 graph.add_edge("tools", "model")  
 
 
-app = graph.compile()
+graph_app = graph.compile() 
 
 
-# ===================== CLI de test =====================
+api = FastAPI()
+
+SESSIONS = {}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None  
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    session_id: str
+
+
+def get_or_create_state(session_id: str | None):
+    if session_id is None:
+        session_id = "default"
+
+    state = SESSIONS.get(session_id, {"messages": []})
+    return session_id, state
+
+
+@api.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    """
+    Endpoint-ul pe care îl va chema clientul web.
+    """
+    session_id, state = get_or_create_state(req.session_id)
+
+    state["messages"].append(HumanMessage(content=req.message))
+
+    result = graph_app.invoke(state)
+
+    SESSIONS[session_id] = result
+
+    last_msg = result["messages"][-1]
+    if isinstance(last_msg, AIMessage):
+        reply = last_msg.content
+    else:
+        reply = str(last_msg)
+
+    return ChatResponse(reply=reply, session_id=session_id)
+
 
 if __name__ == "__main__":
-    print("Asistentul de suport a pornit. Întreabă ceva (Enter gol = exit).")
-    state = {"messages": []}
+    import uvicorn
 
-    while True:
-        q = input("\nQ> ").strip()
-        if not q:
-            break
-
-        state["messages"].append(HumanMessage(content=q))
-
-        result = app.invoke(state)
-        state = result
-
-        last_msg = result["messages"][-1]
-        if isinstance(last_msg, AIMessage):
-            print("\nA>", last_msg.content)
-        else:
-            print("\nA>", last_msg)
+    print("Pornesc API-ul LLM pe http://localhost:8001 ...")
+    uvicorn.run(api, host="0.0.0.0", port=8001)  
