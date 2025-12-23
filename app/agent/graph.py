@@ -44,6 +44,11 @@ def build_system_prompt() -> str:
         "- `get_route_options` este pentru a obține opțiuni de rute de la backend.\n"
         "- Răspunzi mereu în română, clar, cu pași numerotați dacă explici un flux.\n"
         "- Dacă nu ai informațiile necesare, explici ce lipsește în loc să inventezi.\n"
+        "\n"
+        "- IMPORTANT PENTRU TOOL-URI: Când apelezi `get_route_options`, "
+        "parametrii `departure` și `arrival` trebuie să fie FĂRĂ DIACRITICE "
+        "(ex: Bucuresti, Constanta, Iasi, Timisoara). "
+        "Nu folosi ă/â/î/ș/ț în argumentele tool-ului.\n"
     )
 
 
